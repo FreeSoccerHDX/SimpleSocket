@@ -1,18 +1,18 @@
 This little Project includes a SocketServer and SocketClient:
 
 Testing if it works:
-  To run the Server(local) use:
+  To run the Server(local) use: <br>
   ```java -jar SimpleSocket -server```
 
-  To run the Client(local) use:
+  To run the Client(local) use: <br>
   ```java -jar SimpleSocket -client <name>```
 
 The Client will automaticly connect to the Server and start an automated Ping-Handler.
 You can use this to send messages between other Clients and handle the response automaticly.
 
-For development you need to create an SimpleSocketServer-Object:
-```SimpleSocketServer server = new SimpleSocketServer(port);```
-and to connect with a Client you need to create an SimpleSocketClient-Object:
+For development you need to create an SimpleSocketServer-Object: <br>
+```SimpleSocketServer server = new SimpleSocketServer(port);``` <br>
+and to connect with a Client you need to create an SimpleSocketClient-Object: <br>
 ```SimpleSocketClient client = new SimpleSocketClient(clientname,ip,port);```
 
 
@@ -21,9 +21,9 @@ Channel = Specific Channel for the reciver to listen
 Target  = The Name of a Client (client.getClientNames() or 'Server' for the Server itself)
 Message = The Message for the Client/Server
 
-To listen for a Channel use: 
+To listen for a Channel use: <br>
 ```client.setSocketListener(Channel, ClientListener);```
 
 
-The Server can listen for a Channel too:
+The Server can listen for a Channel too: <br>
 ```server.setServerListener(Channel, ServerListener);```
