@@ -1,6 +1,6 @@
 This little Project includes a SocketServer and SocketClient:
 
-Testing if it works:
+Testing if it works: <br>
   To run the Server(local) use: <br>
   ```java -jar SimpleSocket -server```
 
