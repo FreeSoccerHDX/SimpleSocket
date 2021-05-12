@@ -16,10 +16,10 @@ and to connect with a Client you need to create an SimpleSocketClient-Object: <b
 ```SimpleSocketClient client = new SimpleSocketClient(clientname,ip,port);```
 
 
-Now you can just use the client.sendMessage(Channel, Target, Message) - Method to send a Message
-Channel = Specific Channel for the reciver to listen
-Target  = The Name of a Client (client.getClientNames() or 'Server' for the Server itself)
-Message = The Message for the Client/Server
+Now you can just use the client.sendMessage(Channel, Target, Message) - Method to send a Message <br>
+Channel = Specific Channel for the reciver to listen <br>
+Target  = The Name of a Client (client.getClientNames() or 'Server' for the Server itself) <br>
+Message = The Message for the Client/Server <br>
 
 To listen for a Channel use: <br>
 ```client.setSocketListener(Channel, ClientListener);```
