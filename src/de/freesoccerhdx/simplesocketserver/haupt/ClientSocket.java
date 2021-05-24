@@ -3,6 +3,7 @@ package de.freesoccerhdx.simplesocketserver.haupt;
 import java.io.BufferedReader;
 
 
+
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -15,8 +16,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
 
 import de.freesoccerhdx.simplesocket.haupt.JSON;
 import de.freesoccerhdx.simplesocket.haupt.SocketMessage;
@@ -63,10 +62,13 @@ public class ClientSocket {
 	
 	protected HashMap<UUID, ClientResponse> socketrespons = new HashMap<>();
 	
+	private Thread mainthread = null;
+	
 	protected ClientSocket(SimpleSocketServer sss, Socket client, String clientname) {
 		this.client = client;
 		this.sss = sss;
 		this.clientname = clientname;
+		this.mainthread = Thread.currentThread();
 	}
 	
 	private void updateName(String s) {
@@ -293,8 +295,8 @@ public class ClientSocket {
 		 	
 		 	JSON json = null;
 			try {
-				json = (JSON) new JSONParser().parse(json_msg);
-			} catch (ParseException e) {
+				json = JSON.parseJSON(json_msg);
+			} catch (Exception e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
@@ -324,7 +326,7 @@ public class ClientSocket {
 			
 			return new SocketMessage(json, trace, channel, targets, msg);
 		 	
-		}catch(SocketException ex) {
+		}catch(Exception ex) {
 			cs.connected = false;
 			System.out.println("["+SimpleSocketServer.NAME+"] Client disconnected. ("+cs.getClientName()+")");
 			cs.sss.removeClient(cs.getClientName());
@@ -337,6 +339,16 @@ public class ClientSocket {
 	public void stop() {
 		connected = false;
 		
+	//	System.out.println("Stopping mainthread: " + mainthread.getName());
+		
+		try {
+			this.client.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		mainthread.interrupt();
 	}
 
 }

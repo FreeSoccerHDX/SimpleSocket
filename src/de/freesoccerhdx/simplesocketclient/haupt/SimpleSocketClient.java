@@ -3,6 +3,7 @@ package de.freesoccerhdx.simplesocketclient.haupt;
 import java.io.BufferedReader;
 
 
+
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -18,8 +19,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
 
 import de.freesoccerhdx.simplesocket.haupt.JSON;
 import de.freesoccerhdx.simplesocket.haupt.SocketMessage;
@@ -29,7 +28,7 @@ public class SimpleSocketClient {
 	
 	public static boolean DEBUG = false;
 	public static final String NAME = "SimpleSocketClient";
-	public static Thread cmdthread = null;
+	private static Thread cmdthread = null;
 
 	public static void main(String[] args) {
 		String ip = "127.0.0.1"; // localhost
@@ -109,7 +108,9 @@ public class SimpleSocketClient {
 							
 							
 						}else if(name.equals("stop")) {
-							// TODO: handle stop cmd
+							System.out.println("You stopped the Client-Connection.");
+							client.stop();
+							break;
 						}else if(name.equals("getping")) {
 							System.out.println("Ping: " + client.getPing());
 						}else if(name.toLowerCase().startsWith("list")) {
@@ -145,6 +146,7 @@ public class SimpleSocketClient {
  	}
 	
 	
+	
 	private long ping = -1;
 	
 	private Socket client;
@@ -160,11 +162,14 @@ public class SimpleSocketClient {
 	
 	private Thread reciveMsg_thread;
 	private Thread timer_thread;
+	private Thread reconnect_thread = null;
 	
 	private String[] clientlist = new String[] {};
 	
 	private String ip;
 	private int port;
+	
+	private boolean stopped = false;
 	
 	public SimpleSocketClient(String name,String ip, int port) {
 		this.ip = ip;
@@ -176,13 +181,61 @@ public class SimpleSocketClient {
 		}catch(Exception ex) {
 			if(ex instanceof ConnectException) {
 				System.out.println("["+SimpleSocketClient.NAME+"] Login failed.");	
-				startReconnecting();
+				new Thread(new Runnable() {
+					
+					@Override
+					public void run() {
+						startReconnecting();
+						
+					}
+				},"reconnect_handler").start();
 			}else {
 				ex.printStackTrace();
 			}
 		}
 		
 		
+	}
+	
+	public void stop() {
+		if(stopped) {
+			return;
+		}
+		stopped = true;
+		
+		if(client != null) {
+			try {
+				client.close();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		
+		if(reconnect_thread != null) {
+			reconnect_thread.interrupt();
+			if(reconnect_thread.isAlive()) {
+				reconnect_thread.stop();
+			}
+		}
+		
+		if(reciveMsg_thread != null) {
+			reciveMsg_thread.interrupt();
+			if(reciveMsg_thread.isAlive()) {
+				reciveMsg_thread.stop();
+			}
+		}
+		
+		if(timer_thread != null) {
+			timer_thread.interrupt();
+			if(timer_thread.isAlive()) {
+				timer_thread.stop();
+			}
+		}
+		
+		//for(Thread thread : Thread.getAllStackTraces().keySet()) {
+		//	System.out.println("Thread running: " + thread.getName());
+		//}
 	}
 	
 	private void connect() throws Exception {
@@ -205,12 +258,16 @@ public class SimpleSocketClient {
 	
 	
 	private void startReconnecting() {
+		
 		if(isReconnecting()) {
+			reconnect_thread = Thread.currentThread();
 			System.out.println("["+SimpleSocketClient.NAME+"] Client will try to reconnect...");
 			
-			while(true) {
+			while(!stopped) {
 				try {
 					Thread.sleep(1000*5);
+					
+					if(stopped) break;
 					
 					System.out.println("["+SimpleSocketClient.NAME+"] Reconnecting...");
 					
@@ -219,6 +276,7 @@ public class SimpleSocketClient {
 					break;
 					
 				}catch(Exception ex) {
+					if(stopped) break;
 					if(ex instanceof ConnectException) {
 						System.out.println("["+SimpleSocketClient.NAME+"] Reconnect failed");
 					}else {
@@ -230,7 +288,7 @@ public class SimpleSocketClient {
 		}else {
 			System.out.println("["+SimpleSocketClient.NAME+"] Client will not try to reconnect!");
 			if(cmdthread != null) {
-				cmdthread.stop();
+				cmdthread.interrupt();
 			}
 		}
 	}
@@ -365,10 +423,10 @@ public class SimpleSocketClient {
 									startReconnecting();
 									
 								}
-							}).start();
+							},"reconnect_handler").start();
 							
-							reciveMsg_thread.stop();
-							timer_thread.stop();						
+							reciveMsg_thread.interrupt();
+							timer_thread.interrupt();						
 						
 							
 							break;
@@ -396,8 +454,22 @@ public class SimpleSocketClient {
 						
 						
 					} catch (NumberFormatException | IOException e) {
-						// TODO: Handle Server stopped ?
+						login_succesfull = false;
 						running = false;
+						clientlist = new String[] {};
+					
+						
+						new Thread(new Runnable() {
+							
+							@Override
+							public void run() {
+								startReconnecting();
+								
+							}
+						},"reconnect_handler").start();
+						
+						reciveMsg_thread.interrupt();
+						timer_thread.interrupt();			
 						e.printStackTrace();
 						
 						break;
@@ -424,13 +496,13 @@ public class SimpleSocketClient {
 							sendMessage("ping", new String[] {"Server"}, ""+System.currentTimeMillis());
 						}
 						
-						if(count % 100 == 0) {
+						if(count >= 100) {
 							count -= 100;
 						}
 						
 						
 					} catch (InterruptedException e) {
-						e.printStackTrace();
+						break;
 					}
 				}
 				
@@ -575,8 +647,8 @@ public class SimpleSocketClient {
 		 	JSON json = null;
 		 	
 			try {
-				json = (JSON) new JSONParser().parse(json_msg);
-			} catch (ParseException e) {
+				json = JSON.parseJSON(json_msg);
+			} catch (Exception e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}

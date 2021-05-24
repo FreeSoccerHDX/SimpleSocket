@@ -10,6 +10,7 @@ import java.io.PrintWriter;
 import java.lang.module.ModuleDescriptor.Requires;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -24,9 +25,8 @@ import de.freesoccerhdx.simplesocketclient.haupt.ResponseStatus;
 public class SimpleSocketServer {
 	
 	protected static final boolean DEBUG = false;
-	public static final String NAME = "SimpleSocketServer";
-	
-	public static final int port = 11111;
+	public static final String NAME = "SimpleSocketServer";	
+	private static final int port = 11111;
 	
 	
 	private boolean running = true;
@@ -50,6 +50,10 @@ public class SimpleSocketServer {
 		}catch(Exception ex) {
 			ex.printStackTrace();
 		}
+		/*
+		for(Thread thread : Thread.getAllStackTraces().keySet()) {
+			System.out.println("Thread running: " + thread.getName());
+		}*/
 	}
 	
 	
@@ -101,6 +105,7 @@ public class SimpleSocketServer {
 				while(running) {
 					try {
 						Thread.sleep(1000);
+						if(!running) break;
 						count ++;
 						
 						if(count % 60 == 0) {
@@ -113,7 +118,11 @@ public class SimpleSocketServer {
 						
 						
 					}catch(Exception ex) {
-						ex.printStackTrace();
+						if(ex instanceof InterruptedException) {
+							break;
+						}else {
+							ex.printStackTrace();
+						}
 					}
 				}
 				
@@ -254,45 +263,9 @@ public class SimpleSocketServer {
 		
 		running = false;
 		
-		new Thread(new Runnable() {
-
-			@Override
-			public void run() {
-				try {
-					Thread.sleep(1000);
-					System.exit(0);
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-				
-			}
-			
-		}).start();;
-		
 		// broadcast Server-Close
 		broadcastMessage("stop", stopmsg);
 		
-		// stopping Client input-message-reader etc.
-		for(ClientSocket cs : clients.values()) {
-			cs.stop();
-		}
-		
-		
-		if(this.client_thread != null) {
-			if(this.client_thread.isAlive()) {
-				this.client_thread.stop();
-			}
-		}
-		if(this.timer_thread != null) {
-			if(this.timer_thread.isAlive()) {
-				this.timer_thread.stop();
-			}
-		}
-		if(this.cmd_thread != null) {
-			if(this.cmd_thread.isAlive()) {
-				this.cmd_thread.stop();
-			}
-		}
 		
 		
 		// stopping Server socket
@@ -302,6 +275,52 @@ public class SimpleSocketServer {
 			ex.printStackTrace();
 		}
 		
+		/*
+		new Thread(new Runnable() {
+
+			@Override
+			public void run() {
+				try {
+					Thread.sleep(1000);
+			//		System.exit(0);
+					for(Thread thread : Thread.getAllStackTraces().keySet()) {
+						System.out.println("Thread running: " + thread.getName());
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				
+			}
+			
+		},"Stop Thread").start();
+		*/
+		
+		
+		// stopping Client input-message-reader etc.
+		for(ClientSocket cs : clients.values()) {
+			cs.stop();
+		}
+		
+		if(this.client_thread != null) {
+			this.client_thread.interrupt();
+			
+			
+		}
+		if(this.timer_thread != null) {
+			this.timer_thread.interrupt();
+			
+		}
+		
+		if(this.cmd_thread != null) {
+			this.cmd_thread.interrupt();
+			
+		}
+		
+		
+		
+		
+		
+		
 		
 		
 		
@@ -310,26 +329,27 @@ public class SimpleSocketServer {
 	
 	
 	
-	private void handleClientRegistration() throws IOException {
+	private void handleClientRegistration(){
 		
 		
 		this.client_thread = new Thread(new Runnable() {
-
+			
+			
 			@Override
 			public void run() {
 				System.out.println("["+NAME+"] Client-Registration started!\n");
 				try {
 					while(running) {
-						Socket client = waitConnection(serverSocket);
-						
-						new Thread(new Runnable() {
-
-							@Override
-							public void run() {
-								ClientSocket.handleConnection(SimpleSocketServer.this,client);
+						try {
+							Socket client = serverSocket.accept();
+							if(SimpleSocketServer.this.running) {
+								handleNameLogin(SimpleSocketServer.this,client);
 							}
 							
-						}).start();
+						}catch(SocketException se) {
+							System.out.println("["+NAME+"] Client-Registration stopped!");
+							break;
+						}
 						
 					}
 
@@ -337,9 +357,15 @@ public class SimpleSocketServer {
 					ex.printStackTrace();
 				}
 			}
-			private Socket waitConnection(ServerSocket serverSocket) throws IOException {
-				Socket socket = serverSocket.accept(); // blockiert, bis sich ein Client angemeldet hat
-			 	return socket;
+			private void handleNameLogin(SimpleSocketServer server, Socket client) {
+				new Thread(new Runnable() {
+
+					@Override
+					public void run() {
+						ClientSocket.handleConnection(SimpleSocketServer.this,client);
+					}
+					
+				},"handleConnection-"+client.getInetAddress().toString()).start();
 			}
 			
 		}, "client_thread");
@@ -417,13 +443,11 @@ public class SimpleSocketServer {
 
 
 	protected boolean transferMessage(String target, JSON json) {
-		for(String clientname : clients.keySet()) {
-			if(clientname.equals(target)) {
-				
-				String json_msg = json.toJSON();
-				
-				return clients.get(clientname).sendMessage(createMessageLengthString(json_msg)+json_msg);
-			}
+		
+		if(clients.containsKey(target)) {
+			String json_msg = json.toJSON();
+			clients.get(target).sendMessage(createMessageLengthString(json_msg)+json_msg);
+			return true;
 		}
 		return false;
 	}
