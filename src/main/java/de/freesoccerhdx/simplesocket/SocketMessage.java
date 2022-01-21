@@ -26,7 +26,10 @@ public class SocketMessage {
 	public List<String> targets;
 	public ArrayList<String> trace;
 	public JSONObject json;
-	
+
+	private SocketMessage(){
+	}
+
 	public SocketMessage(JSONObject json, JSONArray trace, String channelid, JSONArray targets, String msg) {
 		this.message = msg;
 		this.channelid = channelid;

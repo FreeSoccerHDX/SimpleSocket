@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Set;
 
 import de.freesoccerhdx.simplesocket.ResponseStatus;
+import de.freesoccerhdx.simplesocket.SocketBase;
 import org.json.JSONObject;
 
 
@@ -362,6 +363,7 @@ public class SimpleSocketServer {
 	public void broadcastMessage(String channel, String msg){
 		broadcastMessage(channel, msg, null);
 	}
+
 	public void broadcastMessage(String channel, String msg, ClientResponse response){
 		if(DEBUG) {
 			System.out.println("Broadcast: " + channel + " -> " + msg);
@@ -403,8 +405,13 @@ public class SimpleSocketServer {
 	protected boolean handleCustom(ClientSocket cs, String channelid, List<String> targets, String message) {
 		
 		if(serverlisteners.containsKey(channelid)) {
-			
-			serverlisteners.get(channelid).recive(this, cs, channelid, message);
+			try{
+				serverlisteners.get(channelid).recive(this, cs, channelid, message);
+			}catch (Exception exception){
+				System.err.println("Got Error while handling Client-Message:");
+				exception.printStackTrace();
+			}
+
 			
 			return true;
 		}
@@ -431,8 +438,14 @@ public class SimpleSocketServer {
 		
 		if(clients.containsKey(target)) {
 			String json_msg = json.toString();
-			clients.get(target).sendMessage(createMessageLengthString(json_msg)+json_msg);
-			return true;
+			ClientSocket clientSocket = clients.get(target);
+			try {
+				clients.get(target).sendMessage(clientSocket.getSocket().getOutputStream(), createMessageLengthString(json_msg) + json_msg);
+				return true;
+			}catch (Exception exception){
+				exception.printStackTrace();
+			}
+
 		}
 		return false;
 	}
