@@ -11,43 +11,53 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 
-public class SocketBase {
+public abstract class SocketBase extends Thread{
+
+    private boolean isSending = false;
 
     public boolean sendMessage(OutputStream outputStream, String msg) {
-   //     System.out.println("sendMessage= " + outputStream + " >>> " + msg );
+        if(isSending){
+            System.err.println("#############");
+            System.err.println("#ERROR WHILE SENDING");
+            System.err.println("#############");
+            return sendMessage(outputStream, msg);
+        }
+
+        isSending = true;
+
         try {
             OutputStreamWriter osw = new OutputStreamWriter(outputStream);
             PrintWriter printWriter = new PrintWriter(osw);
 
-            printWriter.print(msg);
+            printWriter.write(msg);
             printWriter.flush();
 
+            isSending = false;
             return true;
         } catch (Exception e) {
             e.printStackTrace();
         }
 
+        isSending = false;
         return false;
     }
 
     private String requiereMessage(BufferedReader reader, int length) throws Exception {
         char[] buffer = new char[length];
-
         int countChars = 0;
-        System.out.println("Start: " + countChars + " of " + length);
+        //System.out.println("Start: " + countChars + " of " + length);
         countChars += reader.read(buffer, countChars, length); // blockiert bis Nachricht empfangen
-        System.out.println("After first: " + countChars + " of " + length);
+        //System.out.println("After first: " + countChars + " of " + length);
         if(countChars == -1) return null;
         while(countChars < length){
             int dif = length-countChars;
             int newzeichen = reader.read(buffer, countChars, dif);
             if(newzeichen == -1) return null;
             countChars += newzeichen;
-            System.out.println("while try: " + countChars + " of " + length);
+            //System.out.println("while try: " + countChars + " of " + length);
         }
         String msg = new String(buffer, 0, length);
-        System.out.println("End: " + countChars + " of " + length);
-    //    System.out.println("Length="+length + " has info= " + msg);
+        //System.out.println("End: " + countChars + " of " + length);
 
         return msg;
     }

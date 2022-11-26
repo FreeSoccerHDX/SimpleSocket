@@ -261,8 +261,6 @@ public class SimpleSocketServer {
 		// broadcast Server-Close
 		broadcastMessage("stop", stopmsg);
 		
-		
-		
 		// stopping Server socket
 		try {
 			serverSocket.close();

@@ -8,6 +8,7 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -23,8 +24,8 @@ import de.freesoccerhdx.simplesocket.SocketMessage;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-public class ClientSocket extends SocketBase{
-	
+public class ClientSocket extends SocketBase {
+
 	protected static void handleConnection(SimpleSocketServer sss, Socket client) {
 		// make sure the Client registers with a Name
 		
@@ -81,15 +82,12 @@ public class ClientSocket extends SocketBase{
 	
 	protected HashMap<UUID, ClientResponse> socketrespons = new HashMap<>();
 	
-	private Thread mainthread = null;
-	
 	
 	
 	protected ClientSocket(SimpleSocketServer sss, Socket client, String clientname) {
 		this.client = client;
 		this.sss = sss;
 		this.clientname = clientname;
-		this.mainthread = Thread.currentThread();
 	}
 	
 	private void updateName(String s) {
@@ -106,7 +104,11 @@ public class ClientSocket extends SocketBase{
 				if(socketInfo != SocketInfo.SUCCESS) {
 					if(socketInfo != SocketInfo.COULD_NOT_PARSE_JSON) {
 						connected = false;
-						throw new IllegalStateException("Reading Messages did not work! Cause=" + socketInfo);
+						if(socketInfo != SocketInfo.COULD_NOT_GETLENGTH_MSG && socketInfo != SocketInfo.COULD_NOT_GETMESSAGE) {
+							throw new IllegalStateException("Reading Messages did not work! Cause=" + socketInfo);
+						}else{
+							throw new SocketException("Reading Messages did not work! Cause=" + socketInfo);
+						}
 					}else{
 						System.err.println("Reading Messages had an error but will not stop: " + socketInfo);
 					}
@@ -115,7 +117,9 @@ public class ClientSocket extends SocketBase{
 					if (cm.channelid.equals("ping")) {
 						for (String target : cm.targets) {
 							if (target.equals("Server")) {
-								sendNewMessage("pong", cm.message + "#" + System.currentTimeMillis(), null);
+								JSONObject jsonObject = new JSONObject(cm.message);
+								jsonObject.put("targettime",System.currentTimeMillis());
+								sendNewMessage("pong", jsonObject, null);
 							} else {
 								sss.transferMessage(target, cm.json);
 							}
@@ -225,8 +229,11 @@ public class ClientSocket extends SocketBase{
 			this.sss.removeClient(this.getClientName());
 			this.stop();
 
-			//if(!(e instanceof IllegalStateException)){
+			if(!(e instanceof SocketException)){
 				e.printStackTrace();
+			}
+			//if(!(e instanceof IllegalStateException)){
+
 			//}
 
 		}
@@ -274,9 +281,7 @@ public class ClientSocket extends SocketBase{
 			
 			String completemsg = json_lng + json_str;
 			
-			sendMessage(this.getSocket().getOutputStream(),completemsg);
-		 	
-		 	return true;
+			return sendMessage(this.getSocket().getOutputStream(),completemsg);
 		}catch(Exception ex) {
 			ex.printStackTrace();
 		}
@@ -375,41 +380,19 @@ public class ClientSocket extends SocketBase{
 			return Pair.of(SocketInfo.SUCCESS, new SocketMessage(json, trace, channel, targets, (String) msg));
 		}
 
-/*
-		} catch (Exception ex) {
-			if (ex instanceof NumberFormatException) {
-				System.out.println("[" + SimpleSocketServer.NAME + "] Client(" + this.getClientName() + ") got messages to fast!");
-			} else if (ex instanceof StringIndexOutOfBoundsException) { // StringIndexOutOfBoundsException => client.close was called
-				System.out.println("[" + SimpleSocketServer.NAME + "] Client(" + this.getClientName() + ") closed Connection intentionally!");
-			} else if (ex instanceof IllegalStateException) {
-				System.out.println("[" + SimpleSocketServer.NAME + "] Client(" + this.getClientName() + ") closed Connection.");
-			} else {
-				ex.printStackTrace();
-			}
-			this.connected = false;
-			this.sendNewMessage("disconnect", "", null);
-			System.out.println("[" + SimpleSocketServer.NAME + "] Client disconnected. (" + this.getClientName() + ")");
-			this.sss.removeClient(this.getClientName());
-
-		}
-
-		
-	 	return null;
-*/
 	}
 
-	public void stop() {
-		connected = false;
-		
 
-		
+	public void stopClient() {
+		connected = false;
+
 		try {
 			this.client.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 		
-		mainthread.interrupt();
+		interrupt();
 	}
 
 }

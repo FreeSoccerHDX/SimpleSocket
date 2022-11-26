@@ -1,0 +1,17 @@
+package de.freesoccerhdx.simplesocket.client;
+
+public enum ClientStatusInfo {
+
+    CLIENT_CONNECTED,
+    LOGIN_MESSAGE_SENDED,
+
+
+    LOGIN_MESSAGE_SENDED_FAILED,
+    CLIENT_WILL_TRY_RECONNECT,
+
+    CLIENT_RECONNECTING,
+    CLIENT_RECONNECTING_FAILED,
+    CLIENT_WILL_NOT_RECONNECT_AND_STOP,
+
+
+}
