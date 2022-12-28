@@ -7,7 +7,11 @@ import de.freesoccerhdx.simplesocket.SocketMessage;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.net.ConnectException;
 import java.net.Socket;
 import java.net.SocketException;
@@ -25,6 +29,7 @@ public class SimpleSocketClient extends SocketBase {
 	public static boolean DEBUG = false;
 	public static final String NAME = "SimpleSocketClient";
 	private static Thread cmdthread = null;
+
 
 	public static void main(String[] args) {
 		String ip = "localhost";//"timcloud.ddns.net"; // localhost
@@ -139,15 +144,10 @@ public class SimpleSocketClient extends SocketBase {
 			
 			
 		} catch (Exception e1) {
-			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		}
 		
-		
-		
  	}
-	
-	
 	
 	//private long ping = -1;
 	
@@ -160,8 +160,9 @@ public class SimpleSocketClient extends SocketBase {
 	
 	private final HashMap<String, ClientListener> socketlistener = new HashMap<>();
 	private final HashMap<UUID,SocketResponse> responselistener = new HashMap<>();
-	
-	
+
+	private PrintWriter printWriter = null;
+	private BufferedReader bufferedReader = null;
 	private Thread reciveMsg_thread;
 	private Timer timer;
 	private Thread reconnect_thread = null;
@@ -208,7 +209,7 @@ public class SimpleSocketClient extends SocketBase {
 		return this.timer;
 	}
 
-	public boolean isLogin_succesfull() {
+	public boolean isLoginSuccesfull() {
 		return login_succesfull;
 	}
 
@@ -223,6 +224,8 @@ public class SimpleSocketClient extends SocketBase {
 	}
 
 	private void stopConnection() {
+		if(stopped && !running) return;
+
 		stopped = true;
 		running = false;
 		this.pingHandler.onStop();
@@ -250,25 +253,42 @@ public class SimpleSocketClient extends SocketBase {
 	public void run() {
 		try {
 			connect();
+		} catch (ConnectException e) {
+			startReconnecting();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		super.run();
 	}
 
 	private void connect() throws IOException {
 		client = new Socket(ip,port);
-		//System.out.println("["+SimpleSocketClient.NAME+"] Client connected.");
+		System.out.println("["+SimpleSocketClient.NAME+"] Client connected.");
 		if(this.statusInfo != null){
 			this.statusInfo.accept(ClientStatusInfo.CLIENT_CONNECTED);
 		}
+		printWriter = new PrintWriter(new OutputStreamWriter(client.getOutputStream()));
+		bufferedReader = new BufferedReader(new InputStreamReader(client.getInputStream()));
 		running = true;
 		startReciveMessages();
-		login_succesfull = true;
-		boolean b = sendMessage("login", new String[]{"Server"}, name);
-		login_succesfull = false;
+
+		//login_succesfull = true;
+		//boolean b = sendMessage("login", new String[]{"Server"}, name);
+		//login_succesfull = false;
+
+		JSONObject json = new JSONObject();
+
+		json.put("trace", Arrays.asList(getClientName()));
+		json.put("channel", "login");
+		json.put("targets", Arrays.asList("Server"));
+		json.put("msg", this.name);
+
+		String json_str = json.toString();
+		String completemsg = SocketBase.createMessageLengthString(json_str);
+
+		boolean b = super.sendMessage(this.printWriter, completemsg);
+
 		if(b) {
-			//System.out.println("["+SimpleSocketClient.NAME+"] Login message was sended successful.");
+			System.out.println("["+SimpleSocketClient.NAME+"] Login message was sended successful.");
 			if(this.statusInfo != null){
 				this.statusInfo.accept(ClientStatusInfo.LOGIN_MESSAGE_SENDED);
 			}
@@ -331,6 +351,7 @@ public class SimpleSocketClient extends SocketBase {
 	
 	
 	private void startReciveMessages() {
+
 		reciveMsg_thread = new Thread(new Runnable() {
 
 			@Override
@@ -365,22 +386,14 @@ public class SimpleSocketClient extends SocketBase {
 										ResponseStatus status = ResponseStatus.values()[Integer.parseInt(data[1])];
 										socketresponse.response(SimpleSocketClient.this, status, name);
 									});
-									Thread removethread = new Thread(new Runnable() {
-
-										@Override
-										public void run() {
-											try {
-												Thread.sleep(1000 * 10);
-												//System.out.println("remove responselistenerid");
-												SimpleSocketClient.this.responselistener.remove(uuid);
-											} catch (Exception ex) {
-												ex.printStackTrace();
-											}
+									SocketBase.createThread("removeResponseListener", true, () -> {
+										try {
+											Thread.sleep(1000 * 10);
+											SimpleSocketClient.this.responselistener.remove(uuid);
+										} catch (Exception ex) {
+											ex.printStackTrace();
 										}
-
 									});
-									removethread.setDaemon(true);
-									removethread.start();
 								} else {
 									System.err.println(" > UUID for Response-Handling was not found.");
 									System.err.println(" >>> Was it to slow ?");
@@ -406,14 +419,10 @@ public class SimpleSocketClient extends SocketBase {
 								clientlist = new String[0];
 
 								// Needs to be in new thread since this one get interrupted after that.
-								new Thread(new Runnable() {
-
-									@Override
-									public void run() {
+								SocketBase.createThread("reconnect_handler", false, () -> {
 										startReconnecting();
+								});
 
-									}
-								}, "reconnect_handler").start();
 								if(reciveMsg_thread != null) {
 									reciveMsg_thread.interrupt();
 								}
@@ -423,19 +432,24 @@ public class SimpleSocketClient extends SocketBase {
 									login_succesfull = true;
 									System.out.println("[" + SimpleSocketClient.NAME + "] Login was successful");
 									if(SimpleSocketClient.this.onLogin != null){
-										SimpleSocketClient.this.onLogin.accept(true);
+										SocketBase.createThread("onLogin", true, () -> {
+											SimpleSocketClient.this.onLogin.accept(true);
+										});
 									}
 									SimpleSocketClient.this.pingHandler.sendPingChannelMessage();
 
 									for (String s : msgbuffer) {
-										sendMessage(getClientSocket().getOutputStream(), s);
+
+										sendMessage(printWriter, s);
 									}
 									msgbuffer.clear();
 								} else {
 									// TODO: Login was not successful
 									System.out.println("[" + SimpleSocketClient.NAME + "] Login was not successful");
 									if(SimpleSocketClient.this.onLogin != null){
-										SimpleSocketClient.this.onLogin.accept(false);
+										SocketBase.createThread("onLogin", true, () -> {
+											SimpleSocketClient.this.onLogin.accept(false);
+										});
 									}
 								}
 
@@ -546,24 +560,18 @@ public class SimpleSocketClient extends SocketBase {
 		
 		
 		String json_str = json.toString();
-		String json_lng = ""+json_str.length();
-		
-		int l = json_lng.length();
-		while(l < 8) {
-			json_lng += " ";
-			l++;
-		}
-		String completemsg = json_lng + json_str;
+		String completemsg = SocketBase.createMessageLengthString(json_str);
 		
 		
-		if(!login_succesfull) {
-			msgbuffer.add(completemsg);
+		if(!this.login_succesfull) {
+			//System.err.println("[SimpleSocketClient] Login not successful until now. Adding message to buffer.");
+			this.msgbuffer.add(completemsg);
 			return false;
 		}
 		//System.out.println("sendmsg completemsg of '" + completemsg + "'");
 		try{
 			//System.out.println("abc start");
-			return sendMessage(getClientSocket().getOutputStream(), completemsg);
+			return super.sendMessage(this.printWriter, completemsg);
 		}catch (Exception exception){
 			//System.out.println("abc error");
 			exception.printStackTrace();;
@@ -589,7 +597,7 @@ public class SimpleSocketClient extends SocketBase {
 	
 	private Pair<SocketInfo,SocketMessage> readNextMessage() throws Exception {
 		//try{
-		Pair<SocketInfo, JSONObject> s = super.readNextMessage(getClientSocket().getInputStream());
+		Pair<SocketInfo, JSONObject> s = super.readNextMessage(this.bufferedReader);
 		SocketInfo info = s.getFirst();
 		JSONObject json = s.getSecond();
 

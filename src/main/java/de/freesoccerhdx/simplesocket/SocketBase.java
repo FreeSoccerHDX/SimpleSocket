@@ -11,24 +11,55 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 
-public abstract class SocketBase extends Thread{
+public abstract class SocketBase extends Thread {
+
+    public static Thread createThreadUnstarted(String name, boolean daemon, Runnable runnable) {
+        Thread thread = new Thread(runnable);
+        thread.setDaemon(daemon);
+        thread.setName(name == null ? "" : name);
+        return thread;
+    }
+
+    public static Thread createThread(String name, boolean daemon, Runnable runnable) {
+        Thread thread = new Thread(runnable);
+        thread.setDaemon(daemon);
+        thread.setName(name == null ? "" : name);
+        thread.start();
+        return thread;
+    }
+
+    public static String createMessageLengthString(String msg) {
+        String msg_lng = ""+msg.length();
+
+        int l = msg_lng.length();
+        while(l < 8) {
+            msg_lng += " ";
+            l++;
+        }
+        return msg_lng + msg;
+    }
+
 
     private boolean isSending = false;
 
-    public boolean sendMessage(OutputStream outputStream, String msg) {
+    public boolean sendMessage(PrintWriter printWriter, String msg) {
         if(isSending){
-            System.err.println("#############");
-            System.err.println("#ERROR WHILE SENDING");
-            System.err.println("#############");
-            return sendMessage(outputStream, msg);
+            try {
+                Thread.sleep(0, 100);
+            }catch (Exception e) {
+                e.printStackTrace();
+            }
+            return sendMessage(printWriter, msg);
         }
 
         isSending = true;
 
         try {
-            OutputStreamWriter osw = new OutputStreamWriter(outputStream);
-            PrintWriter printWriter = new PrintWriter(osw);
-
+            //OutputStreamWriter osw = new OutputStreamWriter(outputStream);
+            //PrintWriter printWriter = new PrintWriter(osw);
+            //System.out.println("###");
+            //System.out.println("### Sending: " + msg);
+            //System.out.println("###");
             printWriter.write(msg);
             printWriter.flush();
 
@@ -48,11 +79,15 @@ public abstract class SocketBase extends Thread{
         //System.out.println("Start: " + countChars + " of " + length);
         countChars += reader.read(buffer, countChars, length); // blockiert bis Nachricht empfangen
         //System.out.println("After first: " + countChars + " of " + length);
-        if(countChars == -1) return null;
+        if(countChars == -1) {
+            return null;
+        }
         while(countChars < length){
             int dif = length-countChars;
             int newzeichen = reader.read(buffer, countChars, dif);
-            if(newzeichen == -1) return null;
+            if(newzeichen == -1) {
+                return null;
+            }
             countChars += newzeichen;
             //System.out.println("while try: " + countChars + " of " + length);
         }
@@ -62,8 +97,8 @@ public abstract class SocketBase extends Thread{
         return msg;
     }
 
-    private Pair<SocketInfo,String> readNewMessage(InputStream inputStream) throws Exception {
-        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+    private Pair<SocketInfo,String> readNewMessage(BufferedReader bufferedReader) throws Exception {
+        //BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
 
         String length_msg = requiereMessage(bufferedReader, 8);
 
@@ -73,15 +108,15 @@ public abstract class SocketBase extends Thread{
         int total_length = Integer.parseInt(length_msg.replaceAll(" ", ""));
 
         String json_msg = requiereMessage(bufferedReader, total_length);
-        if(json_msg == null){
+        if(json_msg == null) {
             return Pair.of(SocketInfo.COULD_NOT_GETMESSAGE, null);
         }
 
         return Pair.of(SocketInfo.SUCCESS, json_msg);
     }
 
-    protected Pair<SocketInfo,JSONObject> readNextMessage(InputStream inputStream) throws Exception {
-        Pair<SocketInfo, String> s = readNewMessage(inputStream);
+    protected Pair<SocketInfo,JSONObject> readNextMessage(BufferedReader bufferedReader) throws Exception {
+        Pair<SocketInfo, String> s = readNewMessage(bufferedReader);
         SocketInfo info = s.getFirst();
         String jsonmsg = s.getSecond();
 
@@ -103,7 +138,7 @@ public abstract class SocketBase extends Thread{
 
 
 
-    public static enum SocketInfo{
+    public enum SocketInfo{
 
         COULD_NOT_GETLENGTH_MSG,
         COULD_NOT_PARSE_JSON,
